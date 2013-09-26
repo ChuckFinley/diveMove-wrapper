@@ -1,0 +1,29 @@
+import.tdr <- function(fp, interval=2, dive.thr=.5) {
+	library("diveMove")
+	tdr.gaps <- transform(read.csv(fp, col.names=c("record", "date", "time", "pressure", "temperature"), skip=2, stringsAsFactors=FALSE, strip.white=TRUE), datetime=as.POSIXct(paste(date, time), format="%m/%d/%Y %H:%M:%S"))
+	tdr.smooth <- merge(data.frame(datetime=seq(min(tdr.gaps$datetime), max(tdr.gaps$datetime), interval)), tdr.gaps, by="datetime", all.x=TRUE)
+	tdrX <- with(tdr.smooth, createTDR(time=datetime, depth=pressure, concurrentData=as.data.frame(temperature), dtime=interval, file=fp))
+	tdr.calib <- calibrateDepth(tdrX, dry.thr=4, wet.thr=4, dive.thr=dive.thr, zoc.method="offset", offset=0)
+	return(tdr.calib)
+}
+
+get.dive.stats <- function(tdrX) {
+	library("diveMove")
+	ds <- subset(diveStats(tdrX), divetim >= 4)
+	dive.id.lab <- data.frame(time=tdrX@tdr@time, pressure=tdrX@tdr@depth, temperature=tdrX@tdr@concurrentData$temperature, dive.id=tdrX@dive.activity$dive.id, dive.phase=tdrX@dive.phases)
+	min.temp <- aggregate(temperature ~ dive.id, data=dive.id.lab, FUN=min)
+	names(min.temp)[2] <- "min.temp"
+	ds <- ds[c(1,3,5,7,14,15)]
+	ds$dive.id <- seq(nrow(ds))
+	ds$date <- trunc(ds$begdesc, "days")
+	dive.stats <- merge(ds, min.temp)
+	return(dive.stats)
+}
+
+get.daily.dive.summ <- function(ds, nest) {
+	library("doBy")
+	summary <- summaryBy(divetim + maxdep + min.temp + botttim ~ date, data=ds, FUN = function(x) { c(med = median(x), avg = mean(x), sd = sd(x), n = length(x), sum = sum(x))})
+	names(summary)[5] <- "dives.n"
+	summary$nest <- nest
+	return(summary[c(1, 22, 5, 6, 2, 3, 4, 7, 8, 9, 12, 13, 14, 17, 18, 19)])
+}
