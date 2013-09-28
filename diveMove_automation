@@ -1,10 +1,16 @@
-import.tdr <- function(fp, interval=2, dive.thr=.5) {
+import.tdr <- function(fps, interval=2, dive.thr=.5) {
 	library("diveMove")
-	tdr.gaps <- transform(read.csv(fp, col.names=c("record", "date", "time", "pressure", "temperature"), skip=2, stringsAsFactors=FALSE, strip.white=TRUE), datetime=as.POSIXct(paste(date, time), format="%m/%d/%Y %H:%M:%S"))
-	tdr.smooth <- merge(data.frame(datetime=seq(min(tdr.gaps$datetime), max(tdr.gaps$datetime), interval)), tdr.gaps, by="datetime", all.x=TRUE)
-	tdrX <- with(tdr.smooth, createTDR(time=datetime, depth=pressure, concurrentData=as.data.frame(temperature), dtime=interval, file=fp))
+	full.log <- do.call(rbind, lapply(fps, read.tdr.csv, interval))
+	tdrX <- with(full.log, createTDR(time=datetime, depth=pressure, concurrentData=as.data.frame(temperature), dtime=interval, file=fp))
 	tdr.calib <- calibrateDepth(tdrX, dry.thr=4, wet.thr=4, dive.thr=dive.thr, zoc.method="offset", offset=0)
 	return(tdr.calib)
+}
+
+read.tdr.csv <- function(fp, interval=2) {
+	csv <- read.csv(fp, col.names=c("record", "date", "time", "pressure", "temperature"), skip=2, stringsAsFactors=FALSE, strip.white=TRUE)
+	tdr.gaps <- transform(csv, datetime=as.POSIXct(paste(date, time), format="%m/%d/%Y %H:%M:%S"))
+	tdr.smooth <- merge(data.frame(datetime=seq(min(tdr.gaps$datetime), max(tdr.gaps$datetime), interval)), tdr.gaps, by="datetime", all.x=TRUE)
+	return(tdr.smooth)
 }
 
 get.dive.stats <- function(tdrX) {
